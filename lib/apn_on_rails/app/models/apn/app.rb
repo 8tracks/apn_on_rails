@@ -39,39 +39,17 @@ class APN::App < APN::Base
 
   def self.send_notifications_for_cert(the_cert, app_id)
     # unless self.unsent_notifications.nil? || self.unsent_notifications.empty?
-      if (app_id == nil)
-        conditions = "app_id is null"
-      else
-        conditions = "app_id = %d" % app_id
-      end
       begin
+        APN::Notification.delete_all("sent_at IS NOT NULL")
+
         APN::Connection.open_for_delivery({:cert => the_cert}) do |conn, sock|
-
-          max_id = APN::Device.connection.select_one(<<-SQL)["max"].to_i
-            SELECT max(id) AS max
-            FROM apn_devices
-            WHERE #{conditions}
-          SQL
-
-          if max_id >= 1
-            start = 0
-            steps = 1000
-
-            while start < max_id
-              devices = APN::Device.where(conditions).limit(steps).offset(start)
-              devices.each do |dev|
-                dev.unsent_notifications.each do |noty|
-                  conn.write(noty.message_for_sending)
-                  noty.sent_at = Time.now
-                  noty.save
-                end
-              end
-
-              start += steps
-            end
+          APN::Notification.find_each(:conditions => {:sent_at => nil}) do |n|
+            conn.write(n.message_for_sending)
+            n.sent_at = Time.now
+            n.save
           end
-
         end
+
       rescue Exception => e
         log_connection_exception(e)
       end

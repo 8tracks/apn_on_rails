@@ -84,7 +84,7 @@ class APN::Notification < APN::Base
 
     # Found this little sucker at: https://gist.github.com/1711226
     message = [0,0,token.bytesize,token,0,payload.bytesize,payload].pack("ccca*cca*")
-    raise APN::Errors::ExceededMessageSizeError.new(message) if message.size.to_i > 256
+    raise APN::Errors::ExceededMessageSizeError.new(message) if message.bytesize > 256
 
     message
   end

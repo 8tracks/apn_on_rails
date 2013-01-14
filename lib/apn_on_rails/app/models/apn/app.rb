@@ -37,6 +37,11 @@ class APN::App < APN::Base
     end
   end
 
+  def self.log_bad_message(msg)
+    @logger ||= Logger.new(Rails.root.join("log", "apn_errors.log").to_s)
+    @logger.fatal(msg)
+  end
+
   def self.send_notifications_for_cert(the_cert, app_id)
     # unless self.unsent_notifications.nil? || self.unsent_notifications.empty?
       begin
@@ -44,9 +49,24 @@ class APN::App < APN::Base
 
         APN::Connection.open_for_delivery({:cert => the_cert}) do |conn, sock|
           APN::Notification.find_each(:conditions => {:sent_at => nil}) do |n|
-            conn.write(n.message_for_sending)
-            n.sent_at = Time.now
-            n.save
+            begin
+              conn.write(n.message_for_sending)
+
+            rescue APN::Errors::ExceededMessageSizeError => e
+              log_bad_message(e.message)
+
+              # The message for sending could be a malformed message that includes
+              # bad UTF8 characters. Instead of raising the error we caught, we
+              # make a new error so that services that serialize the error
+              # message do not blow up when deserializing (e.g., sidekiq).
+              raise "APN MessageSizeError -> Check log/apn_errors.log for errors"
+            ensure
+              # Even if the message is bad, we save the state as sent so we don't
+              # have to deal with it anymore. These messages aren't *critical* for
+              # the site to run, so losing bad messages is fine.
+              n.sent_at = Time.now
+              n.save
+            end
           end
         end
 

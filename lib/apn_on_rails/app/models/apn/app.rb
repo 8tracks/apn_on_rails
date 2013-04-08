@@ -54,6 +54,8 @@ class APN::App < APN::Base
 
             rescue APN::Errors::ExceededMessageSizeError => e
               log_bad_message(e.message)
+              log_bad_message("Bad Message: #{n.message_for_sending}")
+              log_bad_message(e.backtrace.join("\n"))
 
               # The message for sending could be a malformed message that includes
               # bad UTF8 characters. Instead of raising the error we caught, we
